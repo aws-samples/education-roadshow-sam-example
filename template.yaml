@@ -1,0 +1,85 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Feedback app with ML evaluation
+Globals:
+  Function:
+    Timeout: 3
+    Runtime: python3.9
+    Architectures:
+      - x86_64
+
+Resources:
+  ReadFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: read/
+      Handler: app.lambda_handler
+      Environment:
+        Variables:
+          TABLE: !Ref CommentsTable
+      Policies:
+        - DynamoDBReadPolicy: {TableName: !Ref CommentsTable}
+      Events:
+        Read:
+          Type: Api
+          Properties:
+            Path: /
+            Method: get
+
+  WriteFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: write/
+      Handler: app.lambda_handler
+      Environment:
+        Variables:
+          TABLE: !Ref CommentsTable
+      Policies:
+        - DynamoDBWritePolicy: {TableName: !Ref CommentsTable}
+      Events:
+        Read:
+          Type: Api
+          Properties:
+            Path: /
+            Method: POST
+
+  EvalFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: eval/
+      Handler: app.lambda_handler
+      Environment:
+        Variables:
+          TABLE: !Ref CommentsTable
+      Policies:
+        - DynamoDBWritePolicy: {TableName: !Ref CommentsTable}
+        - ComprehendBasicAccessPolicy: {}
+      Events:
+        DDBStream:
+          Type: DynamoDB
+          Properties:
+            Stream: !GetAtt CommentsTable.StreamArn
+            StartingPosition: LATEST
+            BatchSize: 10
+            Enabled: true
+            FilterCriteria:
+              Filters:
+                - Pattern: "{\"eventName\": [\"INSERT\"]}"
+
+  CommentsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+
+Outputs:
+  CommentsApi:
+    Description: "API Gateway endpoint URL for Prod stage for comments function"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"

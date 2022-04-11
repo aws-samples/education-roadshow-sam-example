@@ -1,0 +1,5 @@
+# Ignore sam build directory
+.aws-sam
+
+# Ignore sam configuration file
+samconfig.toml
