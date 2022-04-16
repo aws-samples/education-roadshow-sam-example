@@ -1,0 +1,142 @@
+{
+    "Comment": "Comments processor",
+    "StartAt": "DetectSentiment",
+    "States": {
+        "DetectSentiment": {
+            "Type": "Task",
+            "Next": "IsItPositive",
+            "Parameters": {
+                "LanguageCode": "en",
+                "Text.$": "$.comment"
+            },
+            "Resource": "arn:aws:states:::aws-sdk:comprehend:detectSentiment",
+            "ResultPath": "$.sentiment"
+        },
+        "IsItPositive": {
+            "Type": "Choice",
+            "Choices": [
+                {
+                    "Variable": "$.sentiment.Sentiment",
+                    "StringMatches": "POSITIVE",
+                    "Next": "Parallel"
+                }
+            ],
+            "Default": "SaveComment"
+        },
+        "SaveComment": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::dynamodb:putItem",
+            "Parameters": {
+                "TableName": "${CommentsTable}",
+                "Item": {
+                    "id": {
+                        "S.$": "States.Format('{}-{}', $$.Execution.Name, $$.Execution.StartTime)"
+                    },
+                    "comment": {
+                        "S.$": "$.comment"
+                    },
+                    "sentiment": {
+                        "S.$": "$.sentiment.Sentiment"
+                    },
+                    "ranking": {
+                        "M": {
+                            "positive": {
+                                "N.$": "States.JsonToString($.sentiment.SentimentScore.Positive)"
+                            },
+                            "negative": {
+                                "N.$": "States.JsonToString($.sentiment.SentimentScore.Negative)"
+                            },
+                            "neutral": {
+                                "N.$": "States.JsonToString($.sentiment.SentimentScore.Neutral)"
+                            },
+                            "mixed": {
+                                "N.$": "States.JsonToString($.sentiment.SentimentScore.Mixed)"
+                            }
+                        }
+                    }
+                }
+            },
+            "End": true
+        },
+        "Parallel": {
+            "Type": "Parallel",
+            "Next": "SaveCommentWithTranslations",
+            "ResultPath": "$.languages",
+            "Branches": [
+                {
+                    "StartAt": "TranslateToSpanish",
+                    "States": {
+                        "TranslateToSpanish": {
+                            "Type": "Task",
+                            "Parameters": {
+                                "SourceLanguageCode": "en",
+                                "TargetLanguageCode": "es",
+                                "Text.$": "$.comment"
+                            },
+                            "Resource": "arn:aws:states:::aws-sdk:translate:translateText",
+                            "End": true
+                        }
+                    }
+                },
+                {
+                    "StartAt": "TranslateToGerman",
+                    "States": {
+                        "TranslateToGerman": {
+                            "Type": "Task",
+                            "Parameters": {
+                                "SourceLanguageCode": "en",
+                                "TargetLanguageCode": "de",
+                                "Text.$": "$.comment"
+                            },
+                            "Resource": "arn:aws:states:::aws-sdk:translate:translateText",
+                            "End": true
+                        }
+                    }
+                }
+            ]
+        },
+        "SaveCommentWithTranslations": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::dynamodb:putItem",
+            "Parameters": {
+                "TableName": "${CommentsTable}",
+                "Item": {
+                    "id": {
+                        "S.$": "States.Format('{}-{}', $$.Execution.Name, $$.Execution.StartTime)"
+                    },
+                    "comment": {
+                        "S.$": "$.comment"
+                    },
+                    "sentiment": {
+                        "S.$": "$.sentiment.Sentiment"
+                    },
+                    "langauges": {
+                        "L": [
+                            {
+                                "M": {
+                                    "language": {
+                                        "S.$": "$.languages[0].TargetLanguageCode"
+                                    },
+                                    "translation": {
+                                        "S.$": "$.languages[0].TranslatedText"
+                                    }
+                                }
+                            },
+                            {
+                                "M": {
+                                    "language": {
+                                        "S.$": "$.languages[1].TargetLanguageCode"
+                                    },
+                                    "translation": {
+                                        "S.$": "$.languages[1].TranslatedText"
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                }
+            },
+            "End": true
+        }
+    }
+}

@@ -1,0 +1,92 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Feedback app with ML evaluation
+Globals:
+  Function:
+    Timeout: 3
+    Runtime: python3.9
+    Architectures:
+      - x86_64
+
+Resources:
+  ReadFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: read/
+      Handler: app.lambda_handler
+      Environment:
+        Variables:
+          TABLE: !Ref CommentsTable
+      Policies:
+        - DynamoDBReadPolicy: {TableName: !Ref CommentsTable}
+      Events:
+        Read:
+          Type: Api
+          Properties:
+            Path: /
+            Method: get
+
+  CommentsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+
+  StateMachineLogGroup:
+    Type: AWS::Logs::LogGroup
+
+  StateMachine:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      DefinitionUri: statemachine.asl.json
+      DefinitionSubstitutions:
+        CommentsTable: !Ref CommentsTable
+      Policies:
+          - DynamoDBWritePolicy:
+              TableName: !Ref CommentsTable
+          - ComprehendBasicAccessPolicy: {}
+          - Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'translate:TranslateText'
+                  - 'comprehend:DetectDominantLanguage'
+                Resource: '*'
+          - Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogDelivery
+                  - logs:GetLogDelivery
+                  - logs:UpdateLogDelivery
+                  - logs:DeleteLogDelivery
+                  - logs:ListLogDeliveries
+                  - logs:PutResourcePolicy
+                  - logs:DescribeResourcePolicies
+                  - logs:DescribeLogGroups
+                Resource: "*"
+      Logging:
+        Destinations:
+          - CloudWatchLogsLogGroup:
+              LogGroupArn: !GetAtt StateMachineLogGroup.Arn
+        IncludeExecutionData: true
+        Level: ALL
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /
+            Method: POST
+
+
+Outputs:
+  CommentsApi:
+    Description: "API Gateway endpoint URL for Prod stage for comments function"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"

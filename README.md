@@ -5,7 +5,7 @@ SPDX-License-Identifier: MIT-0
 
 # Building a simple serverless application with SAM (Serverless Application Model)
 
-This project builds a simple feedback application using AWS serverless. A user posts a simple string of text which is saved in an Amazon DynamoDB table. A Lambda function is then invoked to call Amazon Comprehend to evaluate if the string is positive, negative, or nutral.
+This project contains two versions of a similar app. The app is a feedback application that accepts comments and evaluates them using Amazon Comprehend to see if the feedback is positive, negativwe, or somewhere in between.
 
 ## Prerequisites
 * AWS account configured for [programatic access](https://docs.aws.amazon.com/general/latest/gr/aws-sec-cred-types.html)
@@ -13,53 +13,12 @@ This project builds a simple feedback application using AWS serverless. A user p
 * Docker
 * Python 3.9+ (If you want to modify the code)
 
-## Deploying
-*Note: everythuing in here falls under the free tier. However, there is a possibility of minimal charge if you are out of the free tier for Amazon Comprehend*
-* Change to root of project directory
-* Build the project:
-```
-sam build --use-container
-```
-* Deploy the application:
-```
-sam deploy -g
-```
-Accept defaults on all options **except** the following where you need to choose yes.
-```bash
-ReadFunction may not have authorization defined, Is this okay? [y/N]: y
-WriteFunction may not have authorization defined, Is this okay? [y/N]: y
-```
+# Version 1
+This version deploys an Amazon DynamoDB database and three AWS lambda functions. When a comment is written to the database, DynamoDB streams invokes a Lambda to call Amazon Comprehend, evaluate the comment, and write the results back to the database.
 
-## Test the application
+[Deploy this version](./code/README.md)
 
-### Create entry
-* Grab the **CommentUrl** from the output of the deployments
-* Using CURL or Postman post a new comment to the endpoint with the following structure
-```json
-{
-  "comment": "your comment here"
-}
-```
+# Version 2
+This version takes a low-code approach and uses AWS Step Functions to communicate with Amazon Comprehend and writes the data to Amazon DynamoDB. This example takes it a step further. If the feedback is positive, the comments are translated to Spanish and German to be shared with friends.
 
-CURL example:
-```
-curl --location --request POST '<your domain>' --header 'Content-Type: application/json' --data-raw '{"comment":"your comment here"}'
-```
-
-
-curl 'https://q2t1gp5r01.execute-api.us-west-2.amazonaws.com/Prod/'
-
-### Read all entries
-Using CURL:
-
-```
-curl '<your domain>'
-```
-
-## Cleanup
-
-Delete all resources:
-```
-sam delete --stack-name sam-demo
-```
-Enter Y to all options
+[Deploy this version](./low-code/README.md)
