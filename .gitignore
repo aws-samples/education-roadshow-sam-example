@@ -3,3 +3,5 @@
 
 # Ignore sam configuration file
 samconfig.toml
+
+.DS_Store
